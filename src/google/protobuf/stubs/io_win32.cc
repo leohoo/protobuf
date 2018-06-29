@@ -223,30 +223,38 @@ void as_wchar_path(const string& path, wstring* wchar_path) {
   wchar_path->assign(wbuf.get());
 }
 
-bool as_windows_path(const string& path, wstring* result) {
-  if (path.empty()) {
+bool as_windows_path(const char* path, wstring* result) {
+  if (null_or_empty(path)) {
     result->clear();
     return true;
   }
-  if (is_separator(path[0]) || is_drive_relative(path.c_str())) {
+  if (is_separator(path[0]) || is_drive_relative(path)) {
     return false;
   }
 
-  string mutable_path = path;
-  if (!is_path_absolute(mutable_path.c_str()) &&
-      !has_longpath_prefix(mutable_path.c_str())) {
-    char cwd[MAX_PATH];
-    ::GetCurrentDirectoryA(MAX_PATH, cwd);
-    mutable_path = join_paths(cwd, mutable_path);
+  wstring wpath;
+  if (!strings::utf8_to_wcs(path, &wpath)) {
+    return false;
   }
-  as_wchar_path(normalize(mutable_path), result);
-  if (!has_longpath_prefix(result->c_str())) {
+
+  if (!is_path_absolute(wpath.c_str()) && !has_longpath_prefix(wpath.c_str())) {
+    int size = ::GetCurrentDirectoryW(0, NULL);
+    if (size == 0 && GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+      return false;
+    }
+    scoped_array<WCHAR> wcwd(new WCHAR[size]);
+    ::GetCurrentDirectoryW(size, wcwd.get());
+    wpath = join_paths(wcwd.get(), wpath);
+  }
+  wpath = normalize(wpath);
+  if (!has_longpath_prefix(wpath.c_str())) {
     // Add the "\\?\" prefix unconditionally. This way we prevent the Win32 API
     // from processing the path and "helpfully" removing trailing dots from the
     // path, for example.
     // See https://github.com/bazelbuild/bazel/issues/2935
-    *result = wstring(L"\\\\?\\") + *result;
+    wpath = wstring(L"\\\\?\\") + wpath;
   }
+  *result = wpath;
   return true;
 }
 
