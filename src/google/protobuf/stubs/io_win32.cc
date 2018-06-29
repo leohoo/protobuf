@@ -223,7 +223,9 @@ void as_wchar_path(const string& path, wstring* wchar_path) {
   wchar_path->assign(wbuf.get());
 }
 
-bool as_windows_path(const char* path, wstring* result) {
+bool as_windows_path(const string& s_path, wstring* result) {
+  const char* path = s_path.c_str();
+  
   if (null_or_empty(path)) {
     result->clear();
     return true;
